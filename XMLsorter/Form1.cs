@@ -13,6 +13,10 @@ using System.Xml;
 using System.Data.SQLite;
 using static System.Windows.Forms.LinkLabel;
 using System.Text.RegularExpressions;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
+using Timer = System.Threading.Timer;
+using XMLsorter.Properties;
+
 
 
 namespace XMLsorter
@@ -22,6 +26,9 @@ namespace XMLsorter
         string folderPath = ""; // Путь к папке с XML файлами 
         string destinationPath = ""; // Путь для перемещения файла 
         string folderForDB = "";
+        static Timer timer;
+        bool timerStatus = false;
+        long interval = 60 * 1000;
         public Form1()
         {
             InitializeComponent();
@@ -31,6 +38,17 @@ namespace XMLsorter
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
+
+            var musorka = Properties.Settings.Default.Musorka;
+            var sorted = Properties.Settings.Default.Sorted;
+            
+            if (musorka != null && sorted != null)
+            {
+                folderPath = (string)musorka;
+                destinationPath = (string)sorted;
+                textBox1.Text = folderPath;
+                textBox2.Text = destinationPath;
+            }
         }
         private void button1_Click(object sender, EventArgs e)
         {
@@ -54,51 +72,78 @@ namespace XMLsorter
            
 
 
-           // if (textBox1.Text == "" || textBox2.Text == "") return;
+            if (textBox1.Text == "" || textBox2.Text == "") return;
                 folderPath = textBox1.Text;  // Путь к папке с XML файлами 
-                string destinationPath = textBox2.Text; // Путь для перемещения файла 
+                destinationPath = textBox2.Text; // Путь для перемещения файла 
 
-            folderPath = "F:\\Downloads\\Вход\\Помойка";
-            destinationPath = "F:\\Downloads\\Вход";
+            Properties.Settings.Default.Musorka = folderPath;
+            Properties.Settings.Default.Sorted = destinationPath;
+            Properties.Settings.Default.Save();
 
+            textBox1.Enabled = timerStatus; textBox2.Enabled = timerStatus;
+            timerStatus = !timerStatus;
+            if (timerStatus)
+            {
+                button3.Text = "Остановить";
+                long interv = interval;
+                try
+                {
+                    interv = interval * Convert.ToInt64(textBox3.Text);
+                }
+                catch
+                {
+                    interv = interval * 60;
+                }
+                timer = new Timer(LookFiles, null, 0, interv);
+            }
+            else
+            {
+                timer.Dispose();
+                button3.Text = "Запуск";
+            }
+
+        }
+
+        void LookFiles(object state)
+        {
 
 
             string databasePath = destinationPath + "/cadastral.db"; // Путь к базе данных SQLite 
 
-                // Создаем базу данных, если она не существует 
-                CreateDatabase(databasePath);
+            // Создаем базу данных, если она не существует 
+            CreateDatabase(databasePath);
 
-                // Получаем список XML файлов в папке 
-                string[] xmlFiles = Directory.GetFiles(folderPath, "*.xml");
+            // Получаем список XML файлов в папке 
+            string[] xmlFiles = Directory.GetFiles(folderPath, "*.xml");
             string cadastralNumber = "";
             string dateFormation = "";
             // Перебираем каждый XML файл 
             foreach (string xmlFile in xmlFiles)
-                {
+            {
                 // Загружаем содержимое XML файла 
-                    StreamReader f = new StreamReader(xmlFile);
-                    while (!f.EndOfStream)
+                StreamReader f = new StreamReader(xmlFile);
+                while (!f.EndOfStream)
+                {
+                    string s = f.ReadLine();
+                    // Поиск значений в формате "CadastralNumber="MM:NN:KKKKKK""
+                    Match match1 = Regex.Match(s, @"DateCreated=""(\d+-\d+-\d+)""");
+                    if (match1.Success)
                     {
-                        string s = f.ReadLine();
-                        // Поиск значений в формате "CadastralNumber="MM:NN:KKKKKK""
-                        Match match1 = Regex.Match(s, @"DateCreated=""(\d+-\d+-\d+)""");
-                        if (match1.Success)
-                        {
-                            Console.WriteLine("Найдено значение: " + match1.Groups[1].Value);
+                        Console.WriteLine("Найдено значение: " + match1.Groups[1].Value);
                         dateFormation = match1.Groups[1].Value;
-                            break;
-                        }
-
-                        // Поиск значений в формате "<cadastral_number>MM:NN:KKKKKKK</cadastral_number>"
-                        Match match2 = Regex.Match(s, @"<date_received_request>(\d+-\d+-\d+)</date_received_request>");
-                        if (match2.Success)
-                        {
-                            Console.WriteLine("Найдено значение: " + match2.Groups[1].Value);
-                        dateFormation = match2.Groups[1].Value;
-                            break;
-                        }
+                        break;
                     }
-                    f.Close();
+
+                    // Поиск значений в формате "<cadastral_number>MM:NN:KKKKKKK</cadastral_number>"
+                    Match match2 = Regex.Match(s, @"<date_received_request>(\d+-\d+-\d+)</date_received_request>");
+                    if (match2.Success)
+                    {
+                        Console.WriteLine("Найдено значение: " + match2.Groups[1].Value);
+                        dateFormation = match2.Groups[1].Value;
+                        break;
+                    }
+                }
+                f.Close();
 
                 f = new StreamReader(xmlFile);
                 while (!f.EndOfStream)
@@ -127,7 +172,7 @@ namespace XMLsorter
 
                 // Разделяем кадастровый номер на части 
                 string[] parts = cadastralNumber.Split(':');
-                
+
                 string destinationPathTemp = Path.Combine(parts[0], parts[1]);
                 Directory.CreateDirectory(destinationPath + "\\" + destinationPathTemp);
                 destinationPathTemp = destinationPath + "\\" + Path.Combine(destinationPathTemp, Path.GetFileName(xmlFile));
@@ -151,15 +196,16 @@ namespace XMLsorter
                         return;
                     }
                 }
-                else { 
+                else
+                {
                     // Добавляем данные в базу данных 
                     InsertData(databasePath, parts[0], parts[1], parts[2], dateFormation);
 
                     // Разделяем кадастровый номер на части 
-                    
+
 
                 }
-                
+
                 File.Move(xmlFile, destinationPathTemp);
             }
         }
