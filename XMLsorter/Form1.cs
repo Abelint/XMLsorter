@@ -16,6 +16,7 @@ using System.Text.RegularExpressions;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using Timer = System.Threading.Timer;
 using XMLsorter.Properties;
+using System.Threading;
 
 
 
@@ -115,18 +116,59 @@ namespace XMLsorter
 
             // Получаем список XML файлов в папке 
             string[] xmlFiles = Directory.GetFiles(folderPath, "*.xml");
-            string cadastralNumber = "";
-            string dateFormation = "";
+           
             // Перебираем каждый XML файл 
             foreach (string xmlFile in xmlFiles)
             {
+                string cadastralNumber = "";
+                string dateFormation = "";
+
                 // Загружаем содержимое XML файла 
                 StreamReader f = new StreamReader(xmlFile);
+                bool kpt = false;
                 while (!f.EndOfStream)
                 {
                     string s = f.ReadLine();
-                    // Поиск значений в формате "CadastralNumber="MM:NN:KKKKKK""
-                    Match match1 = Regex.Match(s, @"DateCreated=""(\d+-\d+-\d+)""");
+
+                    Match matchKPT1 = Regex.Match(s, @"<extract_cadastral_plan_territory>");
+                    if (matchKPT1.Success)
+                    {
+                        Console.WriteLine("Найдено значение: " + matchKPT1.Groups[1].Value);
+                        kpt = true;
+
+                    }
+                    Match matchKPT2 = Regex.Match(s, @"KPT");
+                    if (matchKPT2.Success)
+                    {
+                        Console.WriteLine("Найдено значение: " + matchKPT2.Groups[1].Value);
+                        kpt = true;
+                        break;
+                    }                    
+
+                }
+                f.Close();
+
+                if (!kpt)
+                {
+                    File.Delete(xmlFile);
+                    continue;
+                }
+
+                f = new StreamReader(xmlFile);
+                while (!f.EndOfStream)
+                {
+                    string s = f.ReadLine();
+
+                    //// Поиск значений в формате "CadastralNumber="MM:NN:KKKKKK""
+                    //Match match1 = Regex.Match(s, @"DateCreated=""(\d+-\d+-\d+)""");
+                    //if (match1.Success)
+                    //{
+                    //    Console.WriteLine("Найдено значение: " + match1.Groups[1].Value);
+                    //    dateFormation = match1.Groups[1].Value;
+                    //    break;
+                    //}
+
+                    Match match1 = Regex.Match(s, @"<ns6:Date>(\d+-\d+-\d+)</ns6:Date>");
                     if (match1.Success)
                     {
                         Console.WriteLine("Найдено значение: " + match1.Groups[1].Value);
@@ -135,13 +177,14 @@ namespace XMLsorter
                     }
 
                     // Поиск значений в формате "<cadastral_number>MM:NN:KKKKKKK</cadastral_number>"
-                    Match match2 = Regex.Match(s, @"<date_received_request>(\d+-\d+-\d+)</date_received_request>");
+                    Match match2 = Regex.Match(s, @"<date_formation>(\d+-\d+-\d+)</date_formation>");
                     if (match2.Success)
                     {
                         Console.WriteLine("Найдено значение: " + match2.Groups[1].Value);
                         dateFormation = match2.Groups[1].Value;
                         break;
                     }
+                  
                 }
                 f.Close();
 
@@ -166,10 +209,23 @@ namespace XMLsorter
                         cadastralNumber = match2.Groups[1].Value;
                         break;
                     }
+
+                    // Поиск значений в формате "<cadastral_number>MM:NN:KKKKKKK</cadastral_number>"
+                    Match match3 = Regex.Match(s, @"<CadastralBlock>(\d+:\d+:\d+)</CadastralBlock>");
+                    if (match3.Success)
+                    {
+                        Console.WriteLine("Найдено значение: " + match3.Groups[1].Value);
+                        cadastralNumber = match3.Groups[1].Value;
+                        break;
+                    }
                 }
                 f.Close();
 
-
+                if(cadastralNumber == "")
+                {
+                    //File.Delete(xmlFile);
+                    continue;
+                }
                 // Разделяем кадастровый номер на части 
                 string[] parts = cadastralNumber.Split(':');
 
@@ -185,21 +241,23 @@ namespace XMLsorter
                     DateTime.TryParse(dateFormation, out dateTimeNew);
                     DateTime.TryParse(oldDate, out dateTimeOld);
 
-                    if (dateTimeNew >= dateTimeOld)
+                    if (dateTimeNew > dateTimeOld)
                     {
-                        File.Delete(destinationPathTemp);
-                        UpdateZapis(databasePath, parts, dateFormation);
+
+                        File.Delete(FilenameFromDB(databasePath, parts));
+                        Thread.Sleep(100);
+                        UpdateZapis(databasePath, parts, dateFormation, destinationPathTemp);
                     }
                     else
                     {
-                        File.Delete(destinationPathTemp);
-                        return;
+                        File.Delete(xmlFile);
+                        continue;
                     }
                 }
                 else
                 {
                     // Добавляем данные в базу данных 
-                    InsertData(databasePath, parts[0], parts[1], parts[2], dateFormation);
+                    InsertData(databasePath, parts[0], parts[1], parts[2], dateFormation, destinationPathTemp);
 
                     // Разделяем кадастровый номер на части 
 
@@ -209,7 +267,7 @@ namespace XMLsorter
                 File.Move(xmlFile, destinationPathTemp);
             }
         }
-        void UpdateZapis(string databasePath, string[] cadastralNum, string newDat)
+        void UpdateZapis(string databasePath, string[] cadastralNum, string newDat, string newFilePath)
         {           
             string connectionString = "Data Source=" + databasePath;
 
@@ -217,7 +275,7 @@ namespace XMLsorter
             {
                 connection.Open();
 
-                string query = "UPDATE cadastral SET dataCreat = '"+newDat+"' WHERE region = '" + cadastralNum[0] +
+                string query = "UPDATE cadastral SET dataCreat = '"+newDat+ "', filePath = '" + newFilePath + "' WHERE region = '" + cadastralNum[0] +
                     "' AND region1 = '" + cadastralNum[1] +"' AND region2 = '" + cadastralNum[2] +"'";
                
                 SQLiteCommand command = new SQLiteCommand(query, connection);
@@ -274,11 +332,29 @@ namespace XMLsorter
             return dataCreat;
         }
 
-            static string GetNodeValue(XmlDocument doc, string xpath)
+        string FilenameFromDB(string databasePath, string[] cadastralNum)
+        {
+            string filePath = "";
+            string connectionString = "Data Source=" + databasePath;
+
+            using (SQLiteConnection connection = new SQLiteConnection(connectionString))
             {
-                XmlNode node = doc.SelectSingleNode(xpath);
-                return node?.InnerText;
+                connection.Open();
+
+                string query = "SELECT filePath FROM cadastral WHERE region = @Region AND region1 = @Region1 AND region2 = @Region2";
+                using (SQLiteCommand command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@Region", cadastralNum[0]);
+                    command.Parameters.AddWithValue("@Region1", cadastralNum[1]);
+                    command.Parameters.AddWithValue("@Region2", cadastralNum[2]);
+                    filePath = (string)command.ExecuteScalar();
+
+                }
+
+                connection.Close();
             }
+            return filePath;
+        }
 
 
         static void CreateDatabase(string databasePath)
@@ -289,23 +365,24 @@ namespace XMLsorter
                 using (SQLiteConnection connection = new SQLiteConnection($"Data Source={databasePath};Version=3;"))
                 {
                     connection.Open();
-                    string sql = "CREATE TABLE cadastral (id INTEGER PRIMARY KEY AUTOINCREMENT, region TEXT, region1 TEXT, region2 TEXT, dataCreat TEXT)";
+                    string sql = "CREATE TABLE cadastral (id INTEGER PRIMARY KEY AUTOINCREMENT, region TEXT, region1 TEXT, region2 TEXT, dataCreat TEXT, filePath TEXT)";
                     SQLiteCommand command = new SQLiteCommand(sql, connection);
                     command.ExecuteNonQuery();
                 }
             }
         }
-        static void InsertData(string databasePath, string region, string region1, string region2,  string dateCreat)
+        static void InsertData(string databasePath, string region, string region1, string region2,  string dateCreat, string filePath)
         {
             using (SQLiteConnection connection = new SQLiteConnection($"Data Source={databasePath};Version=3;"))
             {
                 connection.Open();
-                string sql = "INSERT INTO cadastral (region, region1, region2, dataCreat) VALUES (@region, @region1, @region2, @dataCreat)";
+                string sql = "INSERT INTO cadastral (region, region1, region2, dataCreat, filePath) VALUES (@region, @region1, @region2, @dataCreat, @filePath)";
                 SQLiteCommand command = new SQLiteCommand(sql, connection);
                 command.Parameters.AddWithValue("@region", region);
                 command.Parameters.AddWithValue("@region1", region1);
                 command.Parameters.AddWithValue("@region2", region2);
                 command.Parameters.AddWithValue("@dataCreat", dateCreat);
+                command.Parameters.AddWithValue("@filePath", filePath);
                 command.ExecuteNonQuery();
             }
         }
