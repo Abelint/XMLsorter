@@ -150,7 +150,13 @@ namespace XMLsorter
 
                 if (!kpt)
                 {
-                    File.Delete(xmlFile);
+                    if (checkBox1.Checked) File.Delete(xmlFile);
+                    else
+                    {
+                      
+                        if(!Directory.Exists(destinationPath + "\\Не обработанные\\")) Directory.CreateDirectory(destinationPath + "\\Не обработанные\\");
+                        File.Move(xmlFile, destinationPath + "\\Не обработанные\\" + Path.GetFileName(xmlFile));
+                    }
                     continue;
                 }
 
@@ -223,7 +229,13 @@ namespace XMLsorter
 
                 if(cadastralNumber == "")
                 {
-                    //File.Delete(xmlFile);
+                     if (checkBox1.Checked) File.Delete(xmlFile);
+                    else
+                    {
+                      
+                        if(!Directory.Exists(destinationPath + "\\Не обработанные\\")) Directory.CreateDirectory(destinationPath + "\\Не обработанные\\");
+                        File.Move(xmlFile, destinationPath + "\\Не обработанные\\" + Path.GetFileName(xmlFile));
+                    }
                     continue;
                 }
                 // Разделяем кадастровый номер на части 
@@ -243,8 +255,8 @@ namespace XMLsorter
 
                     if (dateTimeNew > dateTimeOld)
                     {
-
-                        File.Delete(FilenameFromDB(databasePath, parts));
+                        string shoDelet = FilenameFromDB(databasePath, parts);
+                        File.Delete(shoDelet);
                         Thread.Sleep(100);
                         UpdateZapis(databasePath, parts, dateFormation, destinationPathTemp);
                     }
