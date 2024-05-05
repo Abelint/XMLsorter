@@ -242,6 +242,7 @@ namespace XMLsorter
                 string[] parts = cadastralNumber.Split(':');
 
                 string destinationPathTemp = Path.Combine(parts[0], parts[1]);
+                destinationPathTemp = Path.Combine(destinationPathTemp, parts[2]);
                 Directory.CreateDirectory(destinationPath + "\\" + destinationPathTemp);
                 destinationPathTemp = destinationPath + "\\" + Path.Combine(destinationPathTemp, Path.GetFileName(xmlFile));
 
