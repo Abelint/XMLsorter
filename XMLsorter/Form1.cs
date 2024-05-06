@@ -120,6 +120,18 @@ namespace XMLsorter
             // Перебираем каждый XML файл 
             foreach (string xmlFile in xmlFiles)
             {
+                FileInfo file = new FileInfo(xmlFile);
+                long size = file.Length;
+                if (size> 5e+8) 
+                {
+                    if (!Directory.Exists(destinationPath + "\\Не обработанные\\")) Directory.CreateDirectory(destinationPath + "\\Не обработанные\\");
+                    if (File.Exists(destinationPath + "\\Не обработанные\\" + Path.GetFileName(xmlFile))) File.Delete(destinationPath + "\\Не обработанные\\" + Path.GetFileName(xmlFile));
+                    File.Move(xmlFile, destinationPath + "\\Не обработанные\\" + Path.GetFileName(xmlFile));
+                    continue;
+
+                }
+
+
                 string cadastralNumber = "";
                 string dateFormation = "";
 
@@ -153,8 +165,8 @@ namespace XMLsorter
                     if (checkBox1.Checked) File.Delete(xmlFile);
                     else
                     {
-                      
-                        if(!Directory.Exists(destinationPath + "\\Не обработанные\\")) Directory.CreateDirectory(destinationPath + "\\Не обработанные\\");
+                        if (!Directory.Exists(destinationPath + "\\Не обработанные\\")) Directory.CreateDirectory(destinationPath + "\\Не обработанные\\");
+                        if (File.Exists(destinationPath + "\\Не обработанные\\" + Path.GetFileName(xmlFile))) File.Delete(destinationPath + "\\Не обработанные\\" + Path.GetFileName(xmlFile));
                         File.Move(xmlFile, destinationPath + "\\Не обработанные\\" + Path.GetFileName(xmlFile));
                     }
                     continue;
@@ -229,11 +241,12 @@ namespace XMLsorter
 
                 if(cadastralNumber == "")
                 {
-                     if (checkBox1.Checked) File.Delete(xmlFile);
+                    if (checkBox1.Checked) File.Delete(xmlFile);
                     else
                     {
                       
                         if(!Directory.Exists(destinationPath + "\\Не обработанные\\")) Directory.CreateDirectory(destinationPath + "\\Не обработанные\\");
+                        if (File.Exists(destinationPath + "\\Не обработанные\\" + Path.GetFileName(xmlFile))) File.Delete(destinationPath + "\\Не обработанные\\" + Path.GetFileName(xmlFile));
                         File.Move(xmlFile, destinationPath + "\\Не обработанные\\" + Path.GetFileName(xmlFile));
                     }
                     continue;
@@ -242,6 +255,7 @@ namespace XMLsorter
                 string[] parts = cadastralNumber.Split(':');
 
                 string destinationPathTemp = Path.Combine(parts[0], parts[1]);
+                destinationPathTemp = Path.Combine(destinationPathTemp, parts[2]);
                 Directory.CreateDirectory(destinationPath + "\\" + destinationPathTemp);
                 destinationPathTemp = destinationPath + "\\" + Path.Combine(destinationPathTemp, Path.GetFileName(xmlFile));
 
